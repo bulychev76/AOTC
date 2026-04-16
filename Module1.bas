@@ -1,7 +1,7 @@
 Attribute VB_Name = "Module1"
 
 ' =====================================================================
-' WB_ULTRA_ver3.05  |  14.04.2026 18:50
+' WB_nalog_USN_NDS ver3.05  |  14.04.2026 18:50
 ' =====================================================================
 ' ТИПЫ ОТЧЁТОВ WILDBERRIES:
 '   "Основной"    — содержит Продажи + Возвраты + Логистику + Хранение
@@ -53,7 +53,7 @@ Attribute VB_Name = "Module1"
 '   B7 — Лимит дохода за текущий год (по умолчанию 20 млн. р.)
 '
 ' КАК ИМПОРТИРОВАТЬ:
-'   1. Откройте WB_ULTRA_ver03.xlsm в Excel
+'   1. Откройте WB_nalog_USN_NDS.xlsx в Excel
 '   2. Alt+F11 > Редактор VBA
 '   3. Файл > Импорт файла > выберите Module1.bas
 '   4. Удалите старый модуль (ПКМ > Remove Module)
@@ -255,7 +255,7 @@ Sub WB_ULTRA_FINAL()
     wsSvod.Cells(1, 4).Value = "Компенсации ,р."
     wsSvod.Cells(1, 5).Value = "Доход с НДС ,р."
     wsSvod.Cells(1, 6).Value = "Сумма НДС ,р."
-    wsSvod.Cells(1, 7).Value = "Доход без НДС ,р.)"
+    wsSvod.Cells(1, 7).Value = "Доход без НДС ,р."
     wsSvod.Cells(1, 8).Value = "Ставка НДС, %"
     wsSvod.Cells(1, 9).Value = "Отчетов Основной"
     wsSvod.Cells(1, 10).Value = "Отчетов По выкупам"
@@ -282,8 +282,8 @@ Sub WB_ULTRA_FINAL()
     wsSet.Cells(3, 1).Value = "Ставка НДС до лимита ,%"
     wsSet.Cells(4, 1).Value = "Ставка НДС после лимита ,%"
     wsSet.Cells(5, 1).Value = "Сумма дохода за прошлый год ,р."
-    wsSet.Cells(6, 1).Value = "Порог дохода за прошлый год (НДС) ,р"
-    wsSet.Cells(7, 1).Value = "Порог дохода за текущий год (НДС) ,р"
+    wsSet.Cells(6, 1).Value = "Порог дохода за прошлый год (НДС) ,р."
+    wsSet.Cells(7, 1).Value = "Порог дохода за текущий год (НДС) ,р."
     wsSet.Cells(8, 1).Value = "Ставка налога по УСН ,%"
     If prevYearExceeded Then
         wsSet.Cells(3, 1).Value = "Ставка НДС до порога (%) [авто: прошл. год > 60 млн]"
