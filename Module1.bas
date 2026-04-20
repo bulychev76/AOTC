@@ -127,7 +127,6 @@ Function DetectReportType(ws As Worksheet) As String
 
 End Function
 
-
 ' =====================================================================
 ' Вспомогательная функция: извлекает номер отчёта из имени файла WB.
 ' Формат имени: "Еженедельный_детализированный_отчет__595135893_250049872_-_1.xlsx"
@@ -157,6 +156,65 @@ Function ExtractReportNumber(FileName As String) As String
     ExtractReportNumber = result
 End Function
 
+' =====================================================================
+' Вспомогательная функция: поиск точного дня пересечения порога НДС
+' Входные данные:
+'   dailySerial — строка "YYYY-MM-DD~base|YYYY-MM-DD~base|..." (col M в Данные)
+'   cumulBefore — накопленный доход ДО данного отчёта (сумма G предыдущих строк)
+'   limit       — порог (Настройки!B7, по умолчанию 20 млн)
+' Результат:
+'   первый день (по возрастанию), в который cumulBefore + cumDaily >= limit;
+'   0 (Date 30.12.1899), если даты нечитаемы или строка пуста => fallback в вызывающей.
+' =====================================================================
+Function FindDayOfExceed(dailySerial As String, cumulBefore As Double, LIMIT As Double) As Date
+    FindDayOfExceed = 0
+    If Len(dailySerial) = 0 Then Exit Function
+
+    Dim parts() As String
+    parts = Split(dailySerial, "|")
+    If UBound(parts) < 0 Then Exit Function
+
+    Dim days()  As Date
+    Dim bases() As Double
+    ReDim days(0 To UBound(parts))
+    ReDim bases(0 To UBound(parts))
+
+    Dim n As Long: n = 0
+    Dim i As Long
+    For i = 0 To UBound(parts)
+        If parts(i) = "" Then GoTo SkipDailyPart
+        Dim flds() As String
+        flds = Split(parts(i), "~")
+        If UBound(flds) < 1 Then GoTo SkipDailyPart
+        If Not IsDate(flds(0)) Then GoTo SkipDailyPart
+        days(n) = CDate(flds(0))
+        bases(n) = val(flds(1))
+        n = n + 1
+SkipDailyPart:
+    Next i
+
+    If n = 0 Then Exit Function
+
+    ' Пузырьковая сортировка по дате возрастающе (n обычно < 50)
+    Dim j As Long, tmpD As Date, tmpB As Double
+    For i = 0 To n - 2
+        For j = 0 To n - 2 - i
+            If days(j) > days(j + 1) Then
+                tmpD = days(j): days(j) = days(j + 1): days(j + 1) = tmpD
+                tmpB = bases(j): bases(j) = bases(j + 1): bases(j + 1) = tmpB
+            End If
+        Next j
+    Next i
+
+    Dim acc As Double: acc = cumulBefore
+    For i = 0 To n - 1
+        acc = acc + bases(i)
+        If acc >= LIMIT Then
+            FindDayOfExceed = days(i)
+            Exit Function
+        End If
+    Next i
+End Function
 
 ' =====================================================================
 ' Основной макрос обработки отчётов
@@ -167,11 +225,13 @@ Sub WB_ULTRA_FINAL()
     Dim wsCtrl As Worksheet
     Dim wsSet  As Worksheet
     Dim wsSvod As Worksheet
+    Dim wsCal As Worksheet
 
     Set wsData = ThisWorkbook.Sheets("Данные")
     Set wsCtrl = ThisWorkbook.Sheets("Контроль")
     Set wsSet = ThisWorkbook.Sheets("Настройки")
     Set wsSvod = ThisWorkbook.Sheets("Свод")
+    Set wsCal = ThisWorkbook.Sheets("Календарь")
 
     ' ========================
     ' Читаем настройки
@@ -245,6 +305,7 @@ Sub WB_ULTRA_FINAL()
     wsData.Cells(1, 9).Value = "Доход без НДС ,р."
     wsData.Cells(1, 10).Value = "Тип отчёта"
     wsData.Cells(1, 11).Value = "Номер отчёта"
+    wsData.Cells(1, 13).Value = "Разбивка по дням"
 
     ' ========================
     ' Заголовки листа "Свод"
@@ -285,6 +346,9 @@ Sub WB_ULTRA_FINAL()
     wsSet.Cells(6, 1).Value = "Порог дохода за прошлый год (НДС) ,р."
     wsSet.Cells(7, 1).Value = "Порог дохода за текущий год (НДС) ,р."
     wsSet.Cells(8, 1).Value = "Ставка налога по УСН ,%"
+    wsSet.Cells(9, 1).Value = "Кап 1% взноса ,р."
+    wsSet.Cells(10, 1).Value = "Сумма дополнительного страхового взноса за 2025 ,р."
+    wsSet.Cells(11, 1).Value = "Сумма фиксированных страховых взносов за 2025 ,р."
     If prevYearExceeded Then
         wsSet.Cells(3, 1).Value = "Ставка НДС до порога (%) [авто: прошл. год > 60 млн]"
     End If
@@ -395,6 +459,14 @@ Sub WB_ULTRA_FINAL()
         Set dictDt = CreateObject("Scripting.Dictionary")
         Set dictMinDt = CreateObject("Scripting.Dictionary")
         Set dictMaxDt = CreateObject("Scripting.Dictionary")
+
+        ' Дневные словари (ключ "YYYY-MM-DD") — для точного дня превышения порога.
+        Dim dictDailyVyk As Object
+        Dim dictDailyVoz As Object
+        Dim dictDailyKmp As Object
+        Set dictDailyVyk = CreateObject("Scripting.Dictionary")
+        Set dictDailyVoz = CreateObject("Scripting.Dictionary")
+        Set dictDailyKmp = CreateObject("Scripting.Dictionary")
 
         Dim i As Long
 
@@ -537,6 +609,19 @@ Sub WB_ULTRA_FINAL()
                     mkT = "0000-00"
                 End If
 
+                ' Дневной ключ для определения точной даты превышения порога.
+                Dim dkT As String
+                If IsDate(dtT) Then
+                    dkT = Format(CDate(dtT), "YYYY-MM-DD")
+                Else
+                    dkT = "0000-00-00"
+                End If
+                If Not dictDailyVyk.Exists(dkT) Then
+                    dictDailyVyk.Add dkT, 0
+                    dictDailyVoz.Add dkT, 0
+                    dictDailyKmp.Add dkT, 0
+                End If
+
                 ' Инициализируем ключ если встречается впервые
                 If Not dictVyk.Exists(mkT) Then
                     dictVyk.Add mkT, 0
@@ -566,7 +651,9 @@ Sub WB_ULTRA_FINAL()
                     saleVal = CDbl(ws.Cells(i, colSale).Value)
                 End If
                 If docType = "Продажа" Then dictVyk(mkT) = dictVyk(mkT) + saleVal
+                If docType = "Продажа" Then dictDailyVyk(dkT) = dictDailyVyk(dkT) + saleVal
                 If docType = "Возврат" Then dictVoz(mkT) = dictVoz(mkT) + saleVal
+                If docType = "Возврат" Then dictDailyVoz(dkT) = dictDailyVoz(dkT) + saleVal
 
                 If colComp > 0 Then
                     If IsNumeric(ws.Cells(i, colComp).Value) Then
@@ -574,8 +661,10 @@ Sub WB_ULTRA_FINAL()
                         compVal = CDbl(ws.Cells(i, colComp).Value)
                         If docType = "Возврат" Then
                             dictKmp(mkT) = dictKmp(mkT) - compVal
+                            dictDailyKmp(dkT) = dictDailyKmp(dkT) - compVal
                         Else
                             dictKmp(mkT) = dictKmp(mkT) + compVal
+                            dictDailyKmp(dkT) = dictDailyKmp(dkT) + compVal
                         End If
                     End If
                 End If
@@ -584,6 +673,7 @@ Sub WB_ULTRA_FINAL()
                     If InStr(1, osnType, "Добровольная компенсация", vbTextCompare) > 0 Then
                         If IsNumeric(ws.Cells(i, colPay).Value) Then
                             dictKmp(mkT) = dictKmp(mkT) + CDbl(ws.Cells(i, colPay).Value)
+                            dictDailyKmp(dkT) = dictDailyKmp(dkT) + CDbl(ws.Cells(i, colPay).Value)
                         End If
                     End If
                 End If
@@ -677,6 +767,18 @@ Sub WB_ULTRA_FINAL()
         wsData.Cells(newRow, 11).Value = repNum      ' K: Номер отчёта
         wsData.Cells(newRow, 12).Value = mSerial     ' L: Служебный
 
+        ' Дневная сериализация: "YYYY-MM-DD~base|..." — для точной даты порога.
+        Dim dSerial As String: dSerial = ""
+        Dim ddk As Variant
+        For Each ddk In dictDailyVyk.Keys
+            Dim dBase As Double
+            dBase = dictDailyVyk(ddk) - dictDailyVoz(ddk) + dictDailyKmp(ddk)
+            If dBase <> 0 Then
+                dSerial = dSerial & CStr(ddk) & "~" & Str(dBase) & "|"
+            End If
+        Next ddk
+        wsData.Cells(newRow, 13).Value = dSerial     ' M: разбивка по дням
+
         cntTotal = cntTotal + 1
         If reportType = "Основной" Then
             cntOsn = cntOsn + 1
@@ -702,7 +804,7 @@ NextFile:
         wsData.Sort.SortFields.Add Key:=wsData.Range("B2:B" & lastDataRow), _
                                     Order:=xlAscending
         With wsData.Sort
-            .SetRange wsData.Range("A1:L" & lastDataRow)
+            .SetRange wsData.Range("A1:M" & lastDataRow)
             .Header = xlYes
             .Apply
         End With
@@ -750,8 +852,15 @@ NextFile:
         ' Только фиксируем ndsStart; сплит выполняется ниже единым блоком.
         If Not threshFound And (cumul + rBase >= LIMIT) Then
             threshFound = True
-            If IsDate(rDate) Then
-                threshDate = CDate(rDate)
+            ' Точная дата превышения: по дневной разбивке (col M).
+            Dim dSerialRow As String
+            dSerialRow = CStr(wsData.Cells(r, 13).Value)
+            threshDate = FindDayOfExceed(dSerialRow, cumul, LIMIT)
+            ' Fallback: если dailySerial пустой/нечитаемый — старое поведение.
+            If threshDate = 0 Then
+                If IsDate(rDate) Then threshDate = CDate(rDate)
+            End If
+            If threshDate > 0 Then
                 ndsStart = DateSerial(Year(threshDate), Month(threshDate) + 1, 1)
             End If
         End If
@@ -891,6 +1000,12 @@ SkipPart:
 
         r = r + 1
     Loop
+
+    ' Очистка технической колонки M (разбивка по дням): использовалась только для
+    ' определения точной даты превышения порога в FindDayOfExceed.
+    If lastDataRow >= 1 Then
+        wsData.Range("M1:M" & lastDataRow).ClearContents
+    End If
 
     ' ========================
     ' Итоги в лист "Контроль"
@@ -1193,14 +1308,111 @@ SkipSerial:
               "НДС:                " & Format(totNDS, "# ##0.00") & " руб." & Chr(13) & Chr(10) & _
               "Доход без НДС:      " & Format(totBezNDS, "# ##0.00") & " руб."
 
+    
+    ' 3. Заголовки.
+    wsCal.Cells(1, 1).Value = "Мероприятие"
+    wsCal.Cells(1, 2).Value = "Плановый срок"
+    wsCal.Cells(1, 3).Value = "Сумма, р."
+
+    ' 4. Данные — 26 событий, отсортированы хронологически по дате.
+    '    Каждая пара на отдельной строке (без line continuations).
+    wsCal.Cells(2, 1).Value = "Оплата фиксированных страховых взносов за 2025": wsCal.Cells(2, 2).Value = DateSerial(2026, 1, 9)
+    wsCal.Cells(3, 1).Value = "Подача декларации НДС за 4 кв 2025":             wsCal.Cells(3, 2).Value = DateSerial(2026, 1, 25)
+    wsCal.Cells(4, 1).Value = "Оплата НДС 1/3 за 4 кв 2025":                    wsCal.Cells(4, 2).Value = DateSerial(2026, 1, 28)
+    wsCal.Cells(5, 1).Value = "Оплата НДС 2/3 за 4 кв 2025":                    wsCal.Cells(5, 2).Value = DateSerial(2026, 2, 28)
+    wsCal.Cells(6, 1).Value = "Оплата НДС 3/3 за 4 кв 2025":                    wsCal.Cells(6, 2).Value = DateSerial(2026, 3, 28)
+    wsCal.Cells(7, 1).Value = "Подача отчетности РПН":                              wsCal.Cells(7, 2).Value = DateSerial(2026, 4, 1)
+    wsCal.Cells(8, 1).Value = "Оплата экологического сбора":                    wsCal.Cells(8, 2).Value = DateSerial(2026, 4, 15)
+    wsCal.Cells(9, 1).Value = "Подача декларации НДС за 1 кв 2026":                    wsCal.Cells(9, 2).Value = DateSerial(2026, 4, 25)
+    wsCal.Cells(10, 1).Value = "Оплата аванса УСН 1 квартал":                   wsCal.Cells(10, 2).Value = DateSerial(2026, 4, 28)
+    wsCal.Cells(11, 1).Value = "Оплата НДС 1/3 за 1 кв 2026":                   wsCal.Cells(11, 2).Value = DateSerial(2026, 4, 28)
+    wsCal.Cells(12, 1).Value = "Подача декларации УСН за 2025":                 wsCal.Cells(12, 2).Value = DateSerial(2026, 4, 30)
+    wsCal.Cells(13, 1).Value = "Оплата налога УСН за 2025":                     wsCal.Cells(13, 2).Value = DateSerial(2026, 4, 30)
+    wsCal.Cells(14, 1).Value = "Оплата НДС 2/3 за 1 кв 2026":                   wsCal.Cells(14, 2).Value = DateSerial(2026, 5, 28)
+    wsCal.Cells(15, 1).Value = "Оплата НДС 3/3 за 1 кв 2026":                   wsCal.Cells(15, 2).Value = DateSerial(2026, 6, 28)
+    wsCal.Cells(16, 1).Value = "Оплата дополнительного страхового взноса 1%":   wsCal.Cells(16, 2).Value = DateSerial(2026, 7, 1)
+    wsCal.Cells(17, 1).Value = "Подача декларации НДС за 2 кв 2026":            wsCal.Cells(17, 2).Value = DateSerial(2026, 7, 25)
+    wsCal.Cells(18, 1).Value = "Оплата аванса УСН полугодие":                   wsCal.Cells(18, 2).Value = DateSerial(2026, 7, 28)
+    wsCal.Cells(19, 1).Value = "Оплата НДС 1/3 за 2 кв 2026":                   wsCal.Cells(19, 2).Value = DateSerial(2026, 7, 28)
+    wsCal.Cells(20, 1).Value = "Оплата НДС 2/3 за 2 кв 2026":                   wsCal.Cells(20, 2).Value = DateSerial(2026, 8, 28)
+    wsCal.Cells(21, 1).Value = "Оплата НДС 3/3 за 2 кв 2026":                   wsCal.Cells(21, 2).Value = DateSerial(2026, 9, 28)
+    wsCal.Cells(22, 1).Value = "Подача декларации НДС за 3 кв 2026":            wsCal.Cells(22, 2).Value = DateSerial(2026, 10, 25)
+    wsCal.Cells(23, 1).Value = "Оплата аванса УСН 9 месяцев":                   wsCal.Cells(23, 2).Value = DateSerial(2026, 10, 28)
+    wsCal.Cells(24, 1).Value = "Оплата НДС 1/3 за 3 кв 2026":                   wsCal.Cells(24, 2).Value = DateSerial(2026, 10, 28)
+    wsCal.Cells(25, 1).Value = "Оплата НДС 2/3 за 3 кв 2026":                   wsCal.Cells(25, 2).Value = DateSerial(2026, 11, 28)
+    wsCal.Cells(26, 1).Value = "Оплата НДС 3/3 за 3 кв 2026":                   wsCal.Cells(26, 2).Value = DateSerial(2026, 12, 28)
+    wsCal.Cells(27, 1).Value = "Оплата фиксированных страховых взносов за 2026": wsCal.Cells(27, 2).Value = DateSerial(2026, 12, 31)
+
+    ' 5. Заполнение сумм для 1 квартала 2026 из листа "Свод".
+    '    НДС: полный за квартал = Свод!F5; оплаты 1/3, 2/3, 3/3 = Свод!F5 / 3
+    '    УСН: аванс 1 кв = Настройки!B8 (ставка УСН) * Свод!G5 (доход без НДС)
+    Dim ndsQ1  As Double
+    Dim bezQ1  As Double
+    Dim rateUSN As Double
+    Dim vF5 As Variant, vG5 As Variant, vB8 As Variant
+
+    vF5 = wsSvod.Cells(5, 6).Value    ' Итог 1 кв, колонка "в т.ч. НДС"
+    vG5 = wsSvod.Cells(5, 7).Value    ' Итог 1 кв, колонка "Доход без НДС"
+    vB8 = wsSet.Cells(8, 2).Value     ' Настройки B8 - ставка УСН
+
+    If IsNumeric(vF5) Then ndsQ1 = CDbl(vF5) Else ndsQ1 = 0
+    If IsNumeric(vG5) Then bezQ1 = CDbl(vG5) Else bezQ1 = 0
+    If IsNumeric(vB8) Then rateUSN = CDbl(vB8) Else rateUSN = 0
+
+    wsCal.Cells(9, 3).Value = ndsQ1            ' Подача декларации НДС за 1 кв 2026
+    wsCal.Cells(10, 3).Value = rateUSN * bezQ1 ' Оплата аванса УСН 1 квартал
+    wsCal.Cells(11, 3).Value = ndsQ1 / 3       ' Оплата НДС 1/3 за 1 кв 2026
+    wsCal.Cells(14, 3).Value = ndsQ1 / 3       ' Оплата НДС 2/3 за 1 кв 2026
+    wsCal.Cells(15, 3).Value = ndsQ1 / 3       ' Оплата НДС 3/3 за 1 кв 2026
+
+    ' 6. Расчёты по прошлому году:
+    '    B10 (авто) = доп. страховой взнос 1% = MIN(B9, MAX(0, (B5-300000)*1%))
+    '    B11 (ручной ввод) = сумма фиксированных страховых взносов за 2025
+    '    C2  = B11
+    '    C12 = B8*B5 (декларация, без вычетов)
+    '    C13 = MAX(0, B8*B5 - B10 - B11)   (к доплате минус все взносы)
+    '    C16 = B10                          (зеркало доп. страх. взноса)
+    Dim vB9 As Variant, vB11 As Variant
+    Dim cap1Pct           As Double
+    Dim addInsurance2025  As Double
+    Dim fixedInsurance25  As Double
+    vB9  = wsSet.Cells(9, 2).Value
+    vB11 = wsSet.Cells(11, 2).Value
+    ' Кап 1% взноса: берём из B9; если пусто/0 — автозаполняем дефолтом 2025 (277 571 руб. = 8*фикс.взнос)
+    If IsNumeric(vB9) And CDbl(vB9) > 0 Then
+        cap1Pct = CDbl(vB9)
+    Else
+        cap1Pct = 277571
+        wsSet.Cells(9, 2).Value = cap1Pct
+    End If
+    If IsNumeric(vB11) Then fixedInsurance25 = CDbl(vB11) Else fixedInsurance25 = 0
+
+    ' Автозаполнение B10: доп. страховой взнос 1% с превышения 300 000, ограниченный капом из B9
+    addInsurance2025 = (prevYearIncome - 300000) * 0.01
+    If addInsurance2025 < 0 Then addInsurance2025 = 0
+    If addInsurance2025 > cap1Pct Then addInsurance2025 = cap1Pct
+    wsSet.Cells(10, 2).Value = addInsurance2025
+
+    ' Календарь: суммы из полей Настроек
+    wsCal.Cells(2, 3).Value  = fixedInsurance25       ' C2 = B11
+    wsCal.Cells(16, 3).Value = addInsurance2025       ' C16 = B10
+
+    ' C12 (декларация): полный годовой налог без вычетов.
+    ' C13 (оплата):     налог минус оба взноса, не меньше 0.
+    Dim usnTaxGross As Double
+    Dim usnTaxDue   As Double
+    usnTaxGross = rateUSN * prevYearIncome
+    If usnTaxGross < 0 Then usnTaxGross = 0
+    usnTaxDue = usnTaxGross - addInsurance2025 - fixedInsurance25
+    If usnTaxDue < 0 Then usnTaxDue = 0
+    wsCal.Cells(12, 3).Value = usnTaxGross  ' C12: "Подача декларации УСН за 2025"
+    wsCal.Cells(13, 3).Value = usnTaxDue    ' C13: "Оплата налога УСН за 2025"
+
+    ' 5. Минимальное форматирование: формат даты и денег + автоширина.
+    wsCal.Columns("B").NumberFormat = "dd.mm.yyyy"
+    wsCal.Columns("C").NumberFormat = "#,##0.00 $"
+    wsCal.Columns("A:C").AutoFit
+
     MsgBox msgText, vbInformation, "WB ULTRA ver03"
 
 End Sub
-
-
-
-
-
-
-
-
