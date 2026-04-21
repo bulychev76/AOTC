@@ -1,7 +1,7 @@
 Attribute VB_Name = "Module1"
 
 ' =====================================================================
-' WB_nalog_USN_NDS ver3.05  |  14.04.2026 18:50
+' WB_nalog_USN_NDS ver3.05  |  21.04.2026
 ' =====================================================================
 ' ТИПЫ ОТЧЁТОВ WILDBERRIES:
 '   "Основной"    — содержит Продажи + Возвраты + Логистику + Хранение
@@ -326,9 +326,9 @@ Sub WB_ULTRA_FINAL()
     ' ========================
     wsCtrl.Cells(1, 1).Value = "Показатель"
     wsCtrl.Cells(1, 2).Value = "Значение"
-    wsCtrl.Cells(2, 1).Value = "Доход с НДС ,р."
-    wsCtrl.Cells(3, 1).Value = "Сумма НДС ,р."
-    wsCtrl.Cells(4, 1).Value = "Доход без НДС ,р.)"
+    wsCtrl.Cells(2, 1).Value = "Доход с НДС накптиельным итогом ,р."
+    wsCtrl.Cells(3, 1).Value = "Сумма НДС накптиельным итогом ,р."
+    wsCtrl.Cells(4, 1).Value = "Доход без НДС накптиельным итогом ,р.)"
     wsCtrl.Cells(5, 1).Value = "Превышен порог освобождения от уплаты НДС?"
     wsCtrl.Cells(6, 1).Value = "Дата превышения порога"
     wsCtrl.Cells(7, 1).Value = "НДС с 1-го числа след. мес. (" & Format(ndsRate2, "0") & "%)"
@@ -359,6 +359,40 @@ Sub WB_ULTRA_FINAL()
     Dim lastOld As Long
     lastOld = wsData.Cells(wsData.Rows.Count, 1).End(xlUp).Row
     If lastOld > 1 Then wsData.Rows("2:" & lastOld).Delete
+    
+        ' 3. Заголовки.
+    wsCal.Cells(1, 1).Value = "Мероприятие"
+    wsCal.Cells(1, 2).Value = "Плановый срок"
+    wsCal.Cells(1, 3).Value = "Сумма, р."
+
+    ' 4. Данные — 26 событий, отсортированы хронологически по дате.
+    '    Каждая пара на отдельной строке (без line continuations).
+    wsCal.Cells(2, 1).Value = "Оплата фиксированных страховых взносов за 2025": wsCal.Cells(2, 2).Value = DateSerial(2026, 1, 9)
+    wsCal.Cells(3, 1).Value = "Подача декларации НДС за 4 кв 2025":             wsCal.Cells(3, 2).Value = DateSerial(2026, 1, 25)
+    wsCal.Cells(4, 1).Value = "Оплата НДС 1/3 за 4 кв 2025":                    wsCal.Cells(4, 2).Value = DateSerial(2026, 1, 28)
+    wsCal.Cells(5, 1).Value = "Оплата НДС 2/3 за 4 кв 2025":                    wsCal.Cells(5, 2).Value = DateSerial(2026, 2, 28)
+    wsCal.Cells(6, 1).Value = "Оплата НДС 3/3 за 4 кв 2025":                    wsCal.Cells(6, 2).Value = DateSerial(2026, 3, 28)
+    wsCal.Cells(7, 1).Value = "Подача отчетности РПН":                          wsCal.Cells(7, 2).Value = DateSerial(2026, 4, 14)
+    wsCal.Cells(8, 1).Value = "Оплата экологического сбора":                    wsCal.Cells(8, 2).Value = DateSerial(2026, 4, 15)
+    wsCal.Cells(9, 1).Value = "Подача декларации НДС за 1 кв 2026":             wsCal.Cells(9, 2).Value = DateSerial(2026, 4, 25)
+    wsCal.Cells(10, 1).Value = "Оплата аванса УСН 1 квартал":                   wsCal.Cells(10, 2).Value = DateSerial(2026, 4, 28)
+    wsCal.Cells(11, 1).Value = "Оплата НДС 1/3 за 1 кв 2026":                   wsCal.Cells(11, 2).Value = DateSerial(2026, 4, 28)
+    wsCal.Cells(12, 1).Value = "Подача декларации УСН за 2025":                 wsCal.Cells(12, 2).Value = DateSerial(2026, 4, 27)
+    wsCal.Cells(13, 1).Value = "Оплата налога УСН за 2025":                     wsCal.Cells(13, 2).Value = DateSerial(2026, 4, 28)
+    wsCal.Cells(14, 1).Value = "Оплата НДС 2/3 за 1 кв 2026":                   wsCal.Cells(14, 2).Value = DateSerial(2026, 5, 28)
+    wsCal.Cells(15, 1).Value = "Оплата НДС 3/3 за 1 кв 2026":                   wsCal.Cells(15, 2).Value = DateSerial(2026, 6, 28)
+    wsCal.Cells(16, 1).Value = "Оплата дополнительного страхового взноса 1%":   wsCal.Cells(16, 2).Value = DateSerial(2026, 7, 1)
+    wsCal.Cells(17, 1).Value = "Подача декларации НДС за 2 кв 2026":            wsCal.Cells(17, 2).Value = DateSerial(2026, 7, 25)
+    wsCal.Cells(18, 1).Value = "Оплата аванса УСН полугодие":                   wsCal.Cells(18, 2).Value = DateSerial(2026, 7, 28)
+    wsCal.Cells(19, 1).Value = "Оплата НДС 1/3 за 2 кв 2026":                   wsCal.Cells(19, 2).Value = DateSerial(2026, 7, 28)
+    wsCal.Cells(20, 1).Value = "Оплата НДС 2/3 за 2 кв 2026":                   wsCal.Cells(20, 2).Value = DateSerial(2026, 8, 28)
+    wsCal.Cells(21, 1).Value = "Оплата НДС 3/3 за 2 кв 2026":                   wsCal.Cells(21, 2).Value = DateSerial(2026, 9, 28)
+    wsCal.Cells(22, 1).Value = "Подача декларации НДС за 3 кв 2026":            wsCal.Cells(22, 2).Value = DateSerial(2026, 10, 25)
+    wsCal.Cells(23, 1).Value = "Оплата аванса УСН 9 месяцев":                   wsCal.Cells(23, 2).Value = DateSerial(2026, 10, 28)
+    wsCal.Cells(24, 1).Value = "Оплата НДС 1/3 за 3 кв 2026":                   wsCal.Cells(24, 2).Value = DateSerial(2026, 10, 28)
+    wsCal.Cells(25, 1).Value = "Оплата НДС 2/3 за 3 кв 2026":                   wsCal.Cells(25, 2).Value = DateSerial(2026, 11, 28)
+    wsCal.Cells(26, 1).Value = "Оплата НДС 3/3 за 3 кв 2026":                   wsCal.Cells(26, 2).Value = DateSerial(2026, 12, 28)
+    wsCal.Cells(27, 1).Value = "Оплата фиксированных страховых взносов за 2026": wsCal.Cells(27, 2).Value = DateSerial(2026, 12, 31)
 
     Application.ScreenUpdating = False
 
@@ -1292,7 +1326,7 @@ SkipSerial:
     End If
 
     Dim msgText As String
-    msgText = "WB ULTRA ver03 — расчёт завершён!" & Chr(13) & Chr(10) & Chr(13) & Chr(10) & _
+    msgText = "WB_nalog_USN_NDS — расчёт завершён!" & Chr(13) & Chr(10) & Chr(13) & Chr(10) & _
               "Файлов обработано:  " & cntTotal & _
               " (Основной: " & cntOsn & ", По выкупам: " & cntVykup & ")" & Chr(13) & Chr(10) & _
               "Доход пр. год:      " & Format(prevYearIncome, "# ##0") & " руб." & Chr(13) & Chr(10) & _
@@ -1309,39 +1343,7 @@ SkipSerial:
               "Доход без НДС:      " & Format(totBezNDS, "# ##0.00") & " руб."
 
     
-    ' 3. Заголовки.
-    wsCal.Cells(1, 1).Value = "Мероприятие"
-    wsCal.Cells(1, 2).Value = "Плановый срок"
-    wsCal.Cells(1, 3).Value = "Сумма, р."
 
-    ' 4. Данные — 26 событий, отсортированы хронологически по дате.
-    '    Каждая пара на отдельной строке (без line continuations).
-    wsCal.Cells(2, 1).Value = "Оплата фиксированных страховых взносов за 2025": wsCal.Cells(2, 2).Value = DateSerial(2026, 1, 9)
-    wsCal.Cells(3, 1).Value = "Подача декларации НДС за 4 кв 2025":             wsCal.Cells(3, 2).Value = DateSerial(2026, 1, 25)
-    wsCal.Cells(4, 1).Value = "Оплата НДС 1/3 за 4 кв 2025":                    wsCal.Cells(4, 2).Value = DateSerial(2026, 1, 28)
-    wsCal.Cells(5, 1).Value = "Оплата НДС 2/3 за 4 кв 2025":                    wsCal.Cells(5, 2).Value = DateSerial(2026, 2, 28)
-    wsCal.Cells(6, 1).Value = "Оплата НДС 3/3 за 4 кв 2025":                    wsCal.Cells(6, 2).Value = DateSerial(2026, 3, 28)
-    wsCal.Cells(7, 1).Value = "Подача отчетности РПН":                              wsCal.Cells(7, 2).Value = DateSerial(2026, 4, 1)
-    wsCal.Cells(8, 1).Value = "Оплата экологического сбора":                    wsCal.Cells(8, 2).Value = DateSerial(2026, 4, 15)
-    wsCal.Cells(9, 1).Value = "Подача декларации НДС за 1 кв 2026":                    wsCal.Cells(9, 2).Value = DateSerial(2026, 4, 25)
-    wsCal.Cells(10, 1).Value = "Оплата аванса УСН 1 квартал":                   wsCal.Cells(10, 2).Value = DateSerial(2026, 4, 28)
-    wsCal.Cells(11, 1).Value = "Оплата НДС 1/3 за 1 кв 2026":                   wsCal.Cells(11, 2).Value = DateSerial(2026, 4, 28)
-    wsCal.Cells(12, 1).Value = "Подача декларации УСН за 2025":                 wsCal.Cells(12, 2).Value = DateSerial(2026, 4, 30)
-    wsCal.Cells(13, 1).Value = "Оплата налога УСН за 2025":                     wsCal.Cells(13, 2).Value = DateSerial(2026, 4, 30)
-    wsCal.Cells(14, 1).Value = "Оплата НДС 2/3 за 1 кв 2026":                   wsCal.Cells(14, 2).Value = DateSerial(2026, 5, 28)
-    wsCal.Cells(15, 1).Value = "Оплата НДС 3/3 за 1 кв 2026":                   wsCal.Cells(15, 2).Value = DateSerial(2026, 6, 28)
-    wsCal.Cells(16, 1).Value = "Оплата дополнительного страхового взноса 1%":   wsCal.Cells(16, 2).Value = DateSerial(2026, 7, 1)
-    wsCal.Cells(17, 1).Value = "Подача декларации НДС за 2 кв 2026":            wsCal.Cells(17, 2).Value = DateSerial(2026, 7, 25)
-    wsCal.Cells(18, 1).Value = "Оплата аванса УСН полугодие":                   wsCal.Cells(18, 2).Value = DateSerial(2026, 7, 28)
-    wsCal.Cells(19, 1).Value = "Оплата НДС 1/3 за 2 кв 2026":                   wsCal.Cells(19, 2).Value = DateSerial(2026, 7, 28)
-    wsCal.Cells(20, 1).Value = "Оплата НДС 2/3 за 2 кв 2026":                   wsCal.Cells(20, 2).Value = DateSerial(2026, 8, 28)
-    wsCal.Cells(21, 1).Value = "Оплата НДС 3/3 за 2 кв 2026":                   wsCal.Cells(21, 2).Value = DateSerial(2026, 9, 28)
-    wsCal.Cells(22, 1).Value = "Подача декларации НДС за 3 кв 2026":            wsCal.Cells(22, 2).Value = DateSerial(2026, 10, 25)
-    wsCal.Cells(23, 1).Value = "Оплата аванса УСН 9 месяцев":                   wsCal.Cells(23, 2).Value = DateSerial(2026, 10, 28)
-    wsCal.Cells(24, 1).Value = "Оплата НДС 1/3 за 3 кв 2026":                   wsCal.Cells(24, 2).Value = DateSerial(2026, 10, 28)
-    wsCal.Cells(25, 1).Value = "Оплата НДС 2/3 за 3 кв 2026":                   wsCal.Cells(25, 2).Value = DateSerial(2026, 11, 28)
-    wsCal.Cells(26, 1).Value = "Оплата НДС 3/3 за 3 кв 2026":                   wsCal.Cells(26, 2).Value = DateSerial(2026, 12, 28)
-    wsCal.Cells(27, 1).Value = "Оплата фиксированных страховых взносов за 2026": wsCal.Cells(27, 2).Value = DateSerial(2026, 12, 31)
 
     ' 5. Заполнение сумм для 1 квартала 2026 из листа "Свод".
     '    НДС: полный за квартал = Свод!F5; оплаты 1/3, 2/3, 3/3 = Свод!F5 / 3
@@ -1376,7 +1378,7 @@ SkipSerial:
     Dim cap1Pct           As Double
     Dim addInsurance2025  As Double
     Dim fixedInsurance25  As Double
-    vB9  = wsSet.Cells(9, 2).Value
+    vB9 = wsSet.Cells(9, 2).Value
     vB11 = wsSet.Cells(11, 2).Value
     ' Кап 1% взноса: берём из B9; если пусто/0 — автозаполняем дефолтом 2025 (277 571 руб. = 8*фикс.взнос)
     If IsNumeric(vB9) And CDbl(vB9) > 0 Then
@@ -1394,7 +1396,7 @@ SkipSerial:
     wsSet.Cells(10, 2).Value = addInsurance2025
 
     ' Календарь: суммы из полей Настроек
-    wsCal.Cells(2, 3).Value  = fixedInsurance25       ' C2 = B11
+    wsCal.Cells(2, 3).Value = fixedInsurance25        ' C2 = B11
     wsCal.Cells(16, 3).Value = addInsurance2025       ' C16 = B10
 
     ' C12 (декларация): полный годовой налог без вычетов.
@@ -1413,6 +1415,6 @@ SkipSerial:
     wsCal.Columns("C").NumberFormat = "#,##0.00 $"
     wsCal.Columns("A:C").AutoFit
 
-    MsgBox msgText, vbInformation, "WB ULTRA ver03"
+    MsgBox msgText, vbInformation, "WB_nalog_USN_NDS"
 
 End Sub
