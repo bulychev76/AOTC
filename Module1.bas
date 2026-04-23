@@ -409,6 +409,12 @@ Sub WB_ULTRA_FINAL()
 
     Do While FileName <> ""
 
+        ' Пропуск lock-файлов Excel (~$…xlsx), которые Dir() тоже возвращает.
+        If Left(FileName, 2) = "~$" Then
+            FileName = Dir
+            GoTo NextFile
+        End If
+
         Set wb = Workbooks.Open(FolderPath & FileName)
         Set ws = wb.Sheets(1)
 
@@ -429,8 +435,12 @@ Sub WB_ULTRA_FINAL()
         Dim colPay  As Long   ' "К перечислению Продавцу за реализованный Товар"
         Dim colDel  As Long   ' "Услуги по доставке товара покупателю"
         Dim colOsn  As Long   ' "Обоснование для оплаты"
+        Dim colVozm   As Long  ' "Возмещение издержек по перевозке/по складским операциям с товаром"
+        Dim colStore  As Long  ' "Хранение"
+        Dim colDeduct As Long  ' "Удержания"
 
         colDoc = 0: colArt = 0: colSale = 0: colComp = 0: colPay = 0: colDel = 0: colOsn = 0
+        colVozm = 0: colStore = 0: colDeduct = 0
 
         Dim j As Long
         For j = 1 To 100
@@ -457,6 +467,19 @@ Sub WB_ULTRA_FINAL()
             End If
             If InStr(1, hdr, "Обоснование для оплаты", vbTextCompare) > 0 Then
                 colOsn = j
+            End If
+            If InStr(1, hdr, "Возмещение издержек", vbTextCompare) > 0 Then
+                colVozm = j
+            End If
+            ' "Хранение" и "Удержания" — ищем как отдельные заголовки колонок сумм.
+            ' vbTextCompare делает поиск регистронезависимым. Осторожно: "Хранение"
+            ' может попасть в более длинный заголовок, но в реальных отчётах WB
+            ' этот заголовок уникален.
+            If Trim(hdr) = "Хранение" Then
+                colStore = j
+            End If
+            If Trim(hdr) = "Удержания" Then
+                colDeduct = j
             End If
         Next j
 
@@ -623,6 +646,23 @@ Sub WB_ULTRA_FINAL()
                 GoTo NextFile
             End If
 
+            ' Пре-скан: есть ли в файле строки Продажа/Возврат?
+            ' Если нет — это отчёт без реальных продаж (например, старт продаж
+            ' 510675152), и сервисные строки (Возмещение/Хранение/Удержания)
+            ' являются единственным источником движения денег — учитываются в F.
+            ' Если Продажа/Возврат есть, сервисные строки игнорируются
+            ' (они уже отражены в "К перечислению Продавцу" по основным операциям).
+            Dim hasSales As Boolean: hasSales = False
+            Dim ps As Long
+            For ps = 2 To lastRow
+                Dim psDoc As String
+                psDoc = Trim(CStr(ws.Cells(ps, colDoc).Value))
+                If psDoc = "Продажа" Or psDoc = "Возврат" Then
+                    hasSales = True
+                    Exit For
+                End If
+            Next ps
+
             For i = 2 To lastRow
                 Dim docType As String
                 Dim osnType As String
@@ -666,8 +706,19 @@ Sub WB_ULTRA_FINAL()
                     dictMinDt.Add mkT, Null
                     dictMaxDt.Add mkT, Null
                 End If
-                ' Обновляем мин/макс ТОЛЬКО для Продажа/Возврат
-                If (docType = "Продажа" Or docType = "Возврат") And IsDate(dtT) Then
+                ' Обновляем мин/макс для Продажа/Возврат.
+                ' Для сервисных строк даты учитываются только если нет Продажа/Возврат
+                ' в файле (hasSales=False) — иначе даты берутся с основных операций.
+                Dim isMoneyRow As Boolean
+                isMoneyRow = (docType = "Продажа" Or docType = "Возврат")
+                If Not isMoneyRow And Not hasSales Then
+                    If InStr(1, osnType, "Возмещение", vbTextCompare) > 0 _
+                       Or InStr(1, osnType, "Хранение", vbTextCompare) > 0 _
+                       Or InStr(1, osnType, "Удержания", vbTextCompare) > 0 Then
+                        isMoneyRow = True
+                    End If
+                End If
+                If isMoneyRow And IsDate(dtT) Then
                     If Not IsDate(dictMinDt(mkT)) Then
                         dictMinDt(mkT) = dtT
                     ElseIf CDate(dtT) < CDate(dictMinDt(mkT)) Then
@@ -708,6 +759,37 @@ Sub WB_ULTRA_FINAL()
                         If IsNumeric(ws.Cells(i, colPay).Value) Then
                             dictKmp(mkT) = dictKmp(mkT) + CDbl(ws.Cells(i, colPay).Value)
                             dictDailyKmp(dkT) = dictDailyKmp(dkT) + CDbl(ws.Cells(i, colPay).Value)
+                        End If
+                    End If
+                End If
+
+                ' Сервисные строки учитываются только в файлах без Продажа/Возврат
+                ' (гейт hasSales). В обычных еженедельных отчётах Возмещение/Хранение/
+                ' Удержания уже отражены в поле "К перечислению Продавцу" и их
+                ' добавление привело бы к двойному учёту.
+                If Not hasSales Then
+                    '   Возмещение издержек -> dictKmp += col"Возмещение"
+                    '   Хранение            -> dictKmp -= col"Хранение"
+                    '   Удержания           -> dictKmp -= col"Удержания"
+                    If colVozm > 0 And InStr(1, osnType, "Возмещение издержек", vbTextCompare) > 0 Then
+                        If IsNumeric(ws.Cells(i, colVozm).Value) Then
+                            Dim vVozm As Double: vVozm = CDbl(ws.Cells(i, colVozm).Value)
+                            dictKmp(mkT) = dictKmp(mkT) + vVozm
+                            dictDailyKmp(dkT) = dictDailyKmp(dkT) + vVozm
+                        End If
+                    End If
+                    If colStore > 0 And InStr(1, osnType, "Хранение", vbTextCompare) > 0 Then
+                        If IsNumeric(ws.Cells(i, colStore).Value) Then
+                            Dim vStore As Double: vStore = CDbl(ws.Cells(i, colStore).Value)
+                            dictKmp(mkT) = dictKmp(mkT) - vStore
+                            dictDailyKmp(dkT) = dictDailyKmp(dkT) - vStore
+                        End If
+                    End If
+                    If colDeduct > 0 And InStr(1, osnType, "Удержания", vbTextCompare) > 0 Then
+                        If IsNumeric(ws.Cells(i, colDeduct).Value) Then
+                            Dim vDeduct As Double: vDeduct = CDbl(ws.Cells(i, colDeduct).Value)
+                            dictKmp(mkT) = dictKmp(mkT) - vDeduct
+                            dictDailyKmp(dkT) = dictDailyKmp(dkT) - vDeduct
                         End If
                     End If
                 End If
