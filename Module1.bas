@@ -326,9 +326,9 @@ Sub WB_ULTRA_FINAL()
     ' ========================
     wsCtrl.Cells(1, 1).Value = "Показатель"
     wsCtrl.Cells(1, 2).Value = "Значение"
-    wsCtrl.Cells(2, 1).Value = "Доход с НДС накптиельным итогом ,р."
-    wsCtrl.Cells(3, 1).Value = "Сумма НДС накптиельным итогом ,р."
-    wsCtrl.Cells(4, 1).Value = "Доход без НДС накптиельным итогом ,р.)"
+    wsCtrl.Cells(2, 1).Value = "Доход с НДС накопительным итогом ,р."
+    wsCtrl.Cells(3, 1).Value = "Сумма НДС накопительным итогом ,р."
+    wsCtrl.Cells(4, 1).Value = "Доход без НДС накопительным итогом ,р."
     wsCtrl.Cells(5, 1).Value = "Превышен порог освобождения от уплаты НДС?"
     wsCtrl.Cells(6, 1).Value = "Дата превышения порога"
     wsCtrl.Cells(7, 1).Value = "НДС с 1-го числа след. мес. (" & Format(ndsRate2, "0") & "%)"
