@@ -1234,9 +1234,26 @@ SkipPart:
                 Dim sVoz As Double: sVoz = val(sf(2))
                 Dim sKmp As Double: sKmp = val(sf(3))
                 Dim sBaz As Double: sBaz = sVyk - sVoz + sKmp
-                ' НДС пропорционально доле месяца в общем доходе строки
+
+                ' Расчёт sNDS:
+                '   Если у строки rTotNDS уже корректен (> 0) — используем
+                '   пропорциональное деление (старое поведение, не ломает рабочие
+                '   строки, в т.ч. split-строки post-ndsStart и prevYearExceeded).
+                '   Если rTotNDS=0 НО threshFound, проверяем каждую часть mSerial:
+                '   если её месяц >= ndsStart — добавляем НДС по ставке ndsRate2.
+                '   Это закрывает баг строк, обработанных ДО детекции порога:
+                '   у них curRate=0 в главном цикле, но mSerial может содержать
+                '   парты за пост-ndsStart месяцы (например, период Feb-Mar).
                 Dim sNDS As Double: sNDS = 0
-                If rTotBase <> 0 Then sNDS = rTotNDS * sBaz / rTotBase
+                If rTotBase <> 0 And rTotNDS <> 0 Then
+                    sNDS = rTotNDS * sBaz / rTotBase
+                ElseIf threshFound Then
+                    Dim partMonthStart As Date
+                    partMonthStart = DateSerial(sYear, CInt(Mid(sf(0), 6, 2)), 1)
+                    If partMonthStart >= ndsStart Then
+                        sNDS = sBaz * ndsRate2 / (100 + ndsRate2)
+                    End If
+                End If
                 Dim sBez As Double: sBez = sBaz - sNDS
                 mVyk(sMonth) = mVyk(sMonth) + sVyk
                 mVoz(sMonth) = mVoz(sMonth) + sVoz
